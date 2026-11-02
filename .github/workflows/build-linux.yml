@@ -108,20 +108,15 @@ jobs:
             cp -d "$TARGET_DIR/usr/lib/"libexpat*.so* x11-dist/lib/ 2>/dev/null || true
             cp -d "$TARGET_DIR/usr/lib/"libxkbfile*.so* x11-dist/lib/ 2>/dev/null || true
 
-            cat << 'EOF' > x11-dist/run-x11.sh
-            #!/bin/sh
-            DIR="$(cd "$(dirname "$0")" && pwd)"
-            export LD_LIBRARY_PATH="$DIR/lib:$LD_LIBRARY_PATH"
-            export DISPLAY="${DISPLAY:-localhost:0}"
-            if [ -z "$1" ]; then
-              echo "Usage: $0 xeyes|xclock [args]"
-              exit 1
-            fi
-            APP="$DIR/bin/$1"
-            shift
-            exec "$APP" "$@"
-            EOF
-            sed -i 's/^            //' x11-dist/run-x11.sh
+            printf '%s\n' \
+              '#!/bin/sh' \
+              'DIR="$(cd "$(dirname "$0")" && pwd)"' \
+              'export LD_LIBRARY_PATH="$DIR/lib:$LD_LIBRARY_PATH"' \
+              'export DISPLAY="${DISPLAY:-localhost:0}"' \
+              'if [ -z "$1" ]; then echo "Usage: $0 xeyes|xclock [args]"; exit 1; fi' \
+              'APP="$DIR/bin/$1"' \
+              'shift' \
+              'exec "$APP" "$@"' > x11-dist/run-x11.sh
             chmod +x x11-dist/run-x11.sh
             tar -czvf esp32s3-x11-apps.tar.gz -C x11-dist .
             ls -lh esp32s3-x11-apps.tar.gz
