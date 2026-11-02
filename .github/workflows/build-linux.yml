@@ -1,6 +1,10 @@
 name: Build Linux ESP32-S3 (legacy base system)
 
 on:
+  push:
+    branches:
+      - main
+      - x11-apps
   workflow_dispatch:
     inputs:
       reuse_build_from_run:
@@ -21,7 +25,7 @@ concurrency:
 jobs:
   build:
     name: Compile Linux and firmware
-    if: inputs.reuse_build_from_run == ''
+    if: github.event_name == 'push' || inputs.reuse_build_from_run == ''
     runs-on: ubuntu-latest
     timeout-minutes: 360
 
@@ -83,6 +87,52 @@ jobs:
           du -sh build-output
           find build-output -maxdepth 2 -type f | head -100
 
+      - name: Extract X11 applications and libraries
+        run: |
+          mkdir -p x11-dist/bin x11-dist/lib
+          TARGET_DIR=$(find build-output -type d -name "target" | head -n 1)
+          echo "Found target directory: $TARGET_DIR"
+          if [ -n "$TARGET_DIR" ] && [ -d "$TARGET_DIR" ]; then
+            for b in xeyes xclock; do
+              if [ -f "$TARGET_DIR/usr/bin/$b" ]; then
+                cp "$TARGET_DIR/usr/bin/$b" x11-dist/bin/
+                echo "Included binary: $b"
+              fi
+            done
+            cp -d "$TARGET_DIR/usr/lib/"libX*.so* x11-dist/lib/ 2>/dev/null || true
+            cp -d "$TARGET_DIR/usr/lib/"libxcb*.so* x11-dist/lib/ 2>/dev/null || true
+            cp -d "$TARGET_DIR/usr/lib/"libICE*.so* x11-dist/lib/ 2>/dev/null || true
+            cp -d "$TARGET_DIR/usr/lib/"libSM*.so* x11-dist/lib/ 2>/dev/null || true
+            cp -d "$TARGET_DIR/usr/lib/"libfreetype*.so* x11-dist/lib/ 2>/dev/null || true
+            cp -d "$TARGET_DIR/usr/lib/"libfontconfig*.so* x11-dist/lib/ 2>/dev/null || true
+            cp -d "$TARGET_DIR/usr/lib/"libexpat*.so* x11-dist/lib/ 2>/dev/null || true
+            cp -d "$TARGET_DIR/usr/lib/"libxkbfile*.so* x11-dist/lib/ 2>/dev/null || true
+
+            cat << 'EOF' > x11-dist/run-x11.sh
+#!/bin/sh
+DIR="$(cd "$(dirname "$0")" && pwd)"
+export LD_LIBRARY_PATH="$DIR/lib:$LD_LIBRARY_PATH"
+export DISPLAY="${DISPLAY:-localhost:0}"
+if [ -z "$1" ]; then
+  echo "Usage: $0 xeyes|xclock [args]"
+  exit 1
+fi
+APP="$DIR/bin/$1"
+shift
+exec "$APP" "$@"
+EOF
+            chmod +x x11-dist/run-x11.sh
+            tar -czvf esp32s3-x11-apps.tar.gz -C x11-dist .
+            ls -lh esp32s3-x11-apps.tar.gz
+          fi
+
+      - name: Upload standalone X11 binaries
+        uses: actions/upload-artifact@v7
+        with:
+          name: esp32s3-x11-apps
+          path: esp32s3-x11-apps.tar.gz
+          if-no-files-found: warn
+
       - name: Upload raw build output
         uses: actions/upload-artifact@v7
         with:
@@ -110,14 +160,14 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Download raw build output
-        if: inputs.reuse_build_from_run == ''
+        if: github.event_name == 'push' || inputs.reuse_build_from_run == ''
         uses: actions/download-artifact@v8
         with:
           name: esp32-linux-raw-build
           path: build-output
 
       - name: Download raw build output from an earlier run
-        if: inputs.reuse_build_from_run != ''
+        if: github.event_name != 'push' && inputs.reuse_build_from_run != ''
         uses: actions/download-artifact@v8
         with:
           name: esp32-linux-raw-build
