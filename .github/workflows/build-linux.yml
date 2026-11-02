@@ -90,10 +90,13 @@ jobs:
       - name: Extract X11 applications and libraries
         run: |
           mkdir -p x11-dist/bin x11-dist/lib
-          TARGET_DIR=$(find build-output -type d -name "target" | head -n 1)
+          TARGET_DIR=$(find build-output -type d -path "*build-buildroot*/target" | head -n 1)
+          if [ -z "$TARGET_DIR" ] && [ -d "build-output/build-buildroot-esp32s3_devkit_c1_16m/target" ]; then
+            TARGET_DIR="build-output/build-buildroot-esp32s3_devkit_c1_16m/target"
+          fi
           echo "Found target directory: $TARGET_DIR"
           if [ -n "$TARGET_DIR" ] && [ -d "$TARGET_DIR" ]; then
-            for b in xeyes xclock; do
+            for b in xeyes twm; do
               if [ -f "$TARGET_DIR/usr/bin/$b" ]; then
                 cp "$TARGET_DIR/usr/bin/$b" x11-dist/bin/
                 echo "Included binary: $b"
@@ -103,17 +106,13 @@ jobs:
             cp -d "$TARGET_DIR/usr/lib/"libxcb*.so* x11-dist/lib/ 2>/dev/null || true
             cp -d "$TARGET_DIR/usr/lib/"libICE*.so* x11-dist/lib/ 2>/dev/null || true
             cp -d "$TARGET_DIR/usr/lib/"libSM*.so* x11-dist/lib/ 2>/dev/null || true
-            cp -d "$TARGET_DIR/usr/lib/"libfreetype*.so* x11-dist/lib/ 2>/dev/null || true
-            cp -d "$TARGET_DIR/usr/lib/"libfontconfig*.so* x11-dist/lib/ 2>/dev/null || true
-            cp -d "$TARGET_DIR/usr/lib/"libexpat*.so* x11-dist/lib/ 2>/dev/null || true
-            cp -d "$TARGET_DIR/usr/lib/"libxkbfile*.so* x11-dist/lib/ 2>/dev/null || true
 
             printf '%s\n' \
               '#!/bin/sh' \
               'DIR="$(cd "$(dirname "$0")" && pwd)"' \
               'export LD_LIBRARY_PATH="$DIR/lib:$LD_LIBRARY_PATH"' \
               'export DISPLAY="${DISPLAY:-localhost:0}"' \
-              'if [ -z "$1" ]; then echo "Usage: $0 xeyes|xclock [args]"; exit 1; fi' \
+              'if [ -z "$1" ]; then echo "Usage: $0 xeyes|twm [args]"; exit 1; fi' \
               'APP="$DIR/bin/$1"' \
               'shift' \
               'exec "$APP" "$@"' > x11-dist/run-x11.sh
