@@ -222,11 +222,6 @@ jobs:
             echo "Found Buildroot host directory: $BUILDROOT_HOST"
             tar -czf toolchain-export/xtensa-buildroot-toolchain.tar.gz -C "$BUILDROOT_HOST" .
           fi
-          CTNG_TOOLCHAIN=$(find build-output -type d -name "xtensa-esp32s3-linux-uclibcfdpic" | head -n 1)
-          if [ -n "$CTNG_TOOLCHAIN" ] && [ -d "$CTNG_TOOLCHAIN" ]; then
-            echo "Found CT-NG toolchain: $CTNG_TOOLCHAIN"
-            tar -czf toolchain-export/xtensa-ctng-toolchain.tar.gz -C "$CTNG_TOOLCHAIN" .
-          fi
           DYNCONFIG=$(find build-output -name "esp32s3.so" | head -n 1)
           if [ -n "$DYNCONFIG" ]; then
             cp "$DYNCONFIG" toolchain-export/
