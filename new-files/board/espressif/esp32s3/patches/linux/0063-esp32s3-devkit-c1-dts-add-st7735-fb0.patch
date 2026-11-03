@@ -9,14 +9,11 @@ Also add voltage-ranges to mmc_spi for microSD support.
 
 Signed-off-by: Antigravity <developer@deepmind.com>
 ---
- arch/xtensa/boot/dts/esp32s3-devkit-c1.dts | 21 +++++++++++++++++++++
- 1 file changed, 21 insertions(+)
-
 diff --git a/arch/xtensa/boot/dts/esp32s3-devkit-c1.dts b/arch/xtensa/boot/dts/esp32s3-devkit-c1.dts
-index d83dd32adf56..1234567890ab 100644
+index d83dd32..aa424fc 100644
 --- a/arch/xtensa/boot/dts/esp32s3-devkit-c1.dts
 +++ b/arch/xtensa/boot/dts/esp32s3-devkit-c1.dts
-@@ -58,9 +58,25 @@
+@@ -59,11 +59,26 @@
  &spi2 {
  	pinctrl-0 = <&spi2_pins>;
  	pinctrl-names = "default";
@@ -42,4 +39,4 @@ index d83dd32adf56..1234567890ab 100644
 +		bgr;
  	};
  };
--- 
+ 
