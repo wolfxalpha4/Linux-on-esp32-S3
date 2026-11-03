@@ -217,10 +217,13 @@ jobs:
       - name: Package Xtensa toolchain and dynconfig
         run: |
           mkdir -p toolchain-export
-          BUILDROOT_HOST=$(find build-output -type d -path "*build-buildroot*/host" | head -n 1)
-          if [ -n "$BUILDROOT_HOST" ] && [ -d "$BUILDROOT_HOST" ]; then
-            echo "Found Buildroot host directory: $BUILDROOT_HOST"
-            tar -czf toolchain-export/xtensa-buildroot-toolchain.tar.gz -C "$BUILDROOT_HOST" .
+          CTNG_BUILDS=$(find build-output -type d -path "*/crosstool-NG/builds/xtensa-esp32s3-linux-uclibcfdpic" | head -n 1)
+          if [ -n "$CTNG_BUILDS" ] && [ -d "$CTNG_BUILDS" ]; then
+            echo "Found installed CT-NG toolchain: $CTNG_BUILDS"
+            tar -czf toolchain-export/xtensa-esp32s3-toolchain.tar.gz -C "$CTNG_BUILDS" .
+          else
+            echo "Warning: */crosstool-NG/builds/xtensa-esp32s3-linux-uclibcfdpic not found, searching..."
+            find build-output -name "*xtensa*gcc" || true
           fi
           DYNCONFIG=$(find build-output -name "esp32s3.so" | head -n 1)
           if [ -n "$DYNCONFIG" ]; then
