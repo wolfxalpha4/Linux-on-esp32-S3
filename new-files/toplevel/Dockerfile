@@ -18,7 +18,7 @@ RUN git clone https://github.com/jcmvbkbc/esp32-linux-build /work/esp32-linux-bu
     && patch -p1 < /work/local-changes/patches/00-esp32-linux-build.patch
 
 RUN cp /work/local-changes/new-files/toplevel/apply-local-changes.sh \
-       /work/local-changes/new-files/toplevel/devkit-c1-16m.conf \
+       /work/local-changes/new-files/toplevel/*.conf \
        /work/esp32-linux-build/ \
     && ln -s /work/local-changes /work/esp32-linux-build/local-changes
 

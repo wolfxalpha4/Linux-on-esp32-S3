@@ -493,7 +493,7 @@ index e19c62a..09905e8 100644
  
  static uint32_t first_free_mmu = ~0;
  
-@@ -26,6 +27,11 @@ void init_linux_mmap(void)
+@@ -26,6 +27,22 @@ void init_linux_mmap(void)
  			abort();
  		}
  	}
@@ -502,9 +502,34 @@ index e19c62a..09905e8 100644
 +	printf("MMU: kernel e0x14=0x%04x rootfs e0x54=0x%04x\n",
 +	       (unsigned)dst[0x14], (unsigned)dst[0x54]);
 +
++#ifdef CONFIG_LINUX_PSRAM_2M
++	for (i = 0x100; i < 0x180; ++i) {
++		dst[i] = 0x4000;
++	}
++	for (i = 0x180; i < 0x1a0; ++i) {
++		dst[i] = 0x8000 + (i & 0x1f);
++	}
++	for (i = 0x1a0; i < 0x200; ++i) {
++		dst[i] = 0x4000;
++	}
++#endif
  #ifdef CONFIG_LINUX_PSRAM_8M
  	for (i = 0x100; i < 0x180; ++i) {
  		dst[i] = 0x4000;
+diff --git a/esp_hosted_ng/esp/esp_driver/network_adapter/main/Kconfig.projbuild b/esp_hosted_ng/esp/esp_driver/network_adapter/main/Kconfig.projbuild
+--- a/esp_hosted_ng/esp/esp_driver/network_adapter/main/Kconfig.projbuild
++++ b/esp_hosted_ng/esp/esp_driver/network_adapter/main/Kconfig.projbuild
+@@ -14,6 +14,9 @@ menu "Linux Bootloader Configuration"
+ 	choice LINUX_PSRAM_MAP_SIZE
+ 	    bool "PSRAM map size"
+ 	    help
+ 		Amount of PSRAM to map
++
++	    config LINUX_PSRAM_2M
++		bool "2M"
+ 
+ 	    config LINUX_PSRAM_8M
+ 		bool "8M"
 diff --git a/esp_hosted_ng/esp/esp_driver/network_adapter/sdkconfig.defaults.esp32s3 b/esp_hosted_ng/esp/esp_driver/network_adapter/sdkconfig.defaults.esp32s3
 index 57f5958..97a07bd 100644
 --- a/esp_hosted_ng/esp/esp_driver/network_adapter/sdkconfig.defaults.esp32s3

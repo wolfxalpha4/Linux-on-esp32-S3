@@ -1,0 +1,38 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Antigravity <developer@deepmind.com>
+Date: Wed, 4 Nov 2026 21:50:00 +0530
+Subject: [PATCH] xtensa: dts: add esp32s3-zero.dts with 2MB PSRAM mapping
+
+Define the device tree for the Waveshare ESP32-S3-Zero (ESP32-S3FH4R2)
+with 2MB PSRAM (reg = <0x3d800000 0x00200000>).
+
+Signed-off-by: Antigravity <developer@deepmind.com>
+---
+ arch/xtensa/boot/dts/esp32s3-zero.dts | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+ create mode 100644 arch/xtensa/boot/dts/esp32s3-zero.dts
+
+diff --git a/arch/xtensa/boot/dts/esp32s3-zero.dts b/arch/xtensa/boot/dts/esp32s3-zero.dts
+new file mode 100644
+index 000000000000..f58da7ec073b
+--- /dev/null
++++ b/arch/xtensa/boot/dts/esp32s3-zero.dts
+@@ -0,0 +1,16 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++/dts-v1/;
++#include <dt-bindings/gpio/gpio.h>
++#include <dt-bindings/interrupt-controller/irq.h>
++#include "gpio-esp32.h"
++#include "esp32s3.dtsi"
++
++/ {
++	memory@0 {
++		device_type = "memory";
++		reg = <0x3d800000 0x00200000>;
++	};
++};
++
++&iomux {
++	status = "ok";
++};
+-- 

@@ -4,7 +4,14 @@ set -euo pipefail
 
 REPO=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 OUT="$REPO/images"
-PROFILE=esp32s3_devkit_c1_16m
+PROFILE="${PROFILE:-}"
+if [ -z "$PROFILE" ]; then
+	if [ -d "${BUILD:-}/build-buildroot-esp32s3_zero_4m" ] || [ -d "./build-buildroot-esp32s3_zero_4m" ] || [ -d "../esp32-linux-build/build/build-buildroot-esp32s3_zero_4m" ]; then
+		PROFILE=esp32s3_zero_4m
+	else
+		PROFILE=esp32s3_devkit_c1_16m
+	fi
+fi
 
 die() { echo "error: $*" >&2; exit 1; }
 
@@ -44,7 +51,15 @@ else die "esptool not found (pip install esptool)"; fi
 
 mkdir -p "$OUT"
 
-CSV="$REPO/new-files/esp-hosted/network_adapter/partition_table.esp32s3.16m8r"
+if [ "$PROFILE" = "esp32s3_zero_4m" ]; then
+	CSV="$REPO/new-files/esp-hosted/network_adapter/partition_table.esp32s3.4m2r"
+	KCONF="$REPO/new-files/board/espressif/esp32s3/zero_4m_linux.config"
+	FLASH_SIZE="4MB"
+else
+	CSV="$REPO/new-files/esp-hosted/network_adapter/partition_table.esp32s3.16m8r"
+	KCONF="$REPO/new-files/board/espressif/esp32s3/devkit_c1_16m_linux.config"
+	FLASH_SIZE="16MB"
+fi
 GEN=$(find "$BUILD/" -path '*partition_table/gen_esp32part.py' -print -quit 2>/dev/null) \
 	|| die "gen_esp32part.py not found under $BUILD"
 [ -n "$GEN" ] || die "gen_esp32part.py not found under $BUILD"
@@ -125,7 +140,6 @@ fi
 echo "    clean"
 
 echo "==> checking Linux vector address against the firmware"
-KCONF="$REPO/new-files/board/espressif/esp32s3/devkit_c1_16m_linux.config"
 FW_ELF="$NA/build/network_adapter.elf"
 
 elf_symbol_addr() {
@@ -199,11 +213,11 @@ else
 	fi
 fi
 
-echo "==> merging into linux-esp32s3-native-full.bin"
+echo "==> merging into linux-esp32s3-native-full.bin ($FLASH_SIZE)"
 # shellcheck disable=SC2086
 $ESPTOOL --chip esp32s3 merge_bin -o "$OUT/linux-esp32s3-native-full.bin" \
-	--flash_mode dio --flash_freq 80m --flash_size 16MB \
-	--fill-flash-size 16MB \
+	--flash_mode dio --flash_freq 80m --flash_size "$FLASH_SIZE" \
+	--fill-flash-size "$FLASH_SIZE" \
 	0x0            "$OUT/bootloader.bin" \
 	0x8000         "$OUT/partition-table.bin" \
 	"$OFF_APP"     "$OUT/network_adapter.bin" \
