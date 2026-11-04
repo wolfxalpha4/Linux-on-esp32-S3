@@ -1,23 +1,19 @@
-From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Antigravity <developer@deepmind.com>
-Date: Wed, 4 Nov 2026 21:50:00 +0530
+From 24be525d5c568e5a749dc0b3b923a4f41d6f0020 Mon Sep 17 00:00:00 2001
+From: wolfxalpha4 <wolfxalpha4@users.noreply.github.com>
+Date: Wed, 4 Nov 2026 23:08:07 +0530
 Subject: [PATCH] xtensa: dts: add esp32s3-zero.dts with 2MB PSRAM mapping
 
-Define the device tree for the Waveshare ESP32-S3-Zero (ESP32-S3FH4R2)
-with 2MB PSRAM (reg = <0x3d800000 0x00200000>).
-
-Signed-off-by: Antigravity <developer@deepmind.com>
 ---
- arch/xtensa/boot/dts/esp32s3-zero.dts | 16 ++++++++++++++++
- 1 file changed, 16 insertions(+)
+ arch/xtensa/boot/dts/esp32s3-zero.dts | 48 +++++++++++++++++++++++++++
+ 1 file changed, 48 insertions(+)
  create mode 100644 arch/xtensa/boot/dts/esp32s3-zero.dts
 
 diff --git a/arch/xtensa/boot/dts/esp32s3-zero.dts b/arch/xtensa/boot/dts/esp32s3-zero.dts
 new file mode 100644
-index 000000000000..f58da7ec073b
+index 0000000..c0c16a2
 --- /dev/null
 +++ b/arch/xtensa/boot/dts/esp32s3-zero.dts
-@@ -0,0 +1,16 @@
+@@ -0,0 +1,48 @@
 +// SPDX-License-Identifier: GPL-2.0-or-later
 +/dts-v1/;
 +#include <dt-bindings/gpio/gpio.h>
@@ -34,5 +30,38 @@ index 000000000000..f58da7ec073b
 +
 +&iomux {
 +	status = "ok";
++
++	uart0_pins: uart0_pins {
++		pinctrl-single,pins = <
++			PIN(43) FUN0_20MA			/* U0TXD */
++			PIN(44) FUN0_20MA_IE_WPU>;		/* U0RXD */
++	};
++};
++
++&gpio0 {
++	status = "ok";
++};
++
++&uart0 {
++	pinctrl-0 = <&uart0_pins>;
++	pinctrl-names = "default";
++	status = "ok";
++};
++
++&acm {
++	status = "ok";
++};
++
++&ipc {
++	wifi@1 {
++		compatible = "esp,esp32-wifi-shmem";
++		reg = <1>;
++	};
++};
++
++&intc {
++	reg = <0x600c2800 0x800>;
 +};
 -- 
+2.54.0
+
