@@ -1,0 +1,148 @@
+name: Build Linux ESP32-CAM (4MB Flash / 4MB PSRAM)
+
+on:
+  push:
+    branches:
+      - esp32-cam
+      - cam
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: build-linux-cam-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Compile Linux, Rootfs and Bootloader for ESP32-CAM
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Show runner resources
+        run: |
+          echo "CPU cores:"
+          nproc
+          echo "Memory:"
+          free -h
+          echo "Disk:"
+          df -h
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          docker system prune -af || true
+          df -h
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            autoconf automake bash bc bison build-essential bzip2 cmake cpio file \
+            flex gawk git gperf help2man libncurses-dev libtool libtool-bin \
+            libusb-1.0-0 python3 python3-pip python3-venv rsync texinfo unzip wget \
+            ca-certificates patch device-tree-compiler
+
+      - name: Install esptool
+        run: |
+          python3 -m venv "$GITHUB_WORKSPACE/.venv"
+          "$GITHUB_WORKSPACE/.venv/bin/pip" install --upgrade pip
+          "$GITHUB_WORKSPACE/.venv/bin/pip" install esptool
+          echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
+          "$GITHUB_WORKSPACE/.venv/bin/esptool.py" version
+
+      - name: Build xtensa-dynconfig esp32 overlay
+        run: |
+          mkdir -p xtensa-dynconfig
+          git clone https://github.com/jcmvbkbc/xtensa-dynconfig -b original xtensa-dynconfig/repo
+          wget -q https://github.com/jcmvbkbc/xtensa-toolchain-build/raw/e46089b8418f27ecd895881f071aa192dd7f42b5/overlays/original/esp32.tar.gz -O xtensa-dynconfig/esp32.tar.gz
+          mkdir -p xtensa-dynconfig/esp32
+          tar -xf xtensa-dynconfig/esp32.tar.gz -C xtensa-dynconfig/esp32
+          sed -i 's/\(XSHAL_ABI\s\+\)XTHAL_ABI_WINDOWED/\1XTHAL_ABI_CALL0/' xtensa-dynconfig/esp32/{binutils,gcc}/xtensa-config.h
+          make -C xtensa-dynconfig/repo ORIG=1 CONF_DIR="$GITHUB_WORKSPACE/xtensa-dynconfig" esp32.so
+          cp xtensa-dynconfig/repo/esp32.so xtensa-dynconfig/esp32.so
+          ls -la xtensa-dynconfig/esp32.so
+
+      - name: Cache Xtensa toolchain
+        id: cache-toolchain
+        uses: actions/cache@v4
+        with:
+          path: toolchain/xtensa-esp32-linux-uclibcfdpic
+          key: xtensa-esp32-toolchain-fdpic-v1
+
+      - name: Build Xtensa toolchain (if not cached)
+        if: steps.cache-toolchain.outputs.cache-hit != 'true'
+        env:
+          XTENSA_GNU_CONFIG: ${{ github.workspace }}/xtensa-dynconfig/esp32.so
+        run: |
+          git clone https://github.com/jcmvbkbc/crosstool-NG.git -b xtensa-fdpic crosstool-NG
+          pushd crosstool-NG
+          ./bootstrap
+          ./configure --enable-local
+          make -j$(nproc)
+          ./ct-ng xtensa-esp32-linux-uclibcfdpic
+          mkdir -p "$GITHUB_WORKSPACE/toolchain"
+          CT_PREFIX="$GITHUB_WORKSPACE/toolchain" nice ./ct-ng build
+          popd
+          test -x "$GITHUB_WORKSPACE/toolchain/xtensa-esp32-linux-uclibcfdpic/bin/xtensa-esp32-linux-uclibcfdpic-gcc"
+
+      - name: Build Buildroot Userspace and Kernel
+        env:
+          XTENSA_GNU_CONFIG: ${{ github.workspace }}/xtensa-dynconfig/esp32.so
+        run: |
+          TOOLCHAIN_DIR="$GITHUB_WORKSPACE/toolchain/xtensa-esp32-linux-uclibcfdpic"
+          export PATH="$TOOLCHAIN_DIR/bin:$PATH"
+
+          git clone https://github.com/jcmvbkbc/buildroot -b xtensa-2024.05-fdpic buildroot
+          mkdir -p build
+
+          make -C buildroot O="$GITHUB_WORKSPACE/build" defconfig BR2_DEFCONFIG="$GITHUB_WORKSPACE/configs/esp32cam_4m_defconfig"
+          buildroot/utils/config --file build/.config --set-str TOOLCHAIN_EXTERNAL_PATH "$TOOLCHAIN_DIR"
+          buildroot/utils/config --file build/.config --set-str TOOLCHAIN_EXTERNAL_PREFIX '$(ARCH)-esp32-linux-uclibcfdpic'
+          buildroot/utils/config --file build/.config --set-str TOOLCHAIN_EXTERNAL_CUSTOM_PREFIX '$(ARCH)-esp32-linux-uclibcfdpic'
+          buildroot/utils/config --file build/.config --set-str ROOTFS_OVERLAY "$GITHUB_WORKSPACE/rootfs_overlay"
+          buildroot/utils/config --file build/.config --set-str LINUX_KERNEL_CUSTOM_CONFIG_FILE "$GITHUB_WORKSPACE/configs/esp32cam_4m_linux.config"
+
+          make -C buildroot O="$GITHUB_WORKSPACE/build" -j$(nproc)
+
+          test -f build/images/xipImage
+          test -f build/images/rootfs.cramfs
+          ls -lh build/images/
+
+      - name: Setup ESP-IDF for Bootloader
+        run: |
+          git clone --depth 1 -b v5.1.2 --recursive https://github.com/espressif/esp-idf.git "$GITHUB_WORKSPACE/esp-idf"
+          "$GITHUB_WORKSPACE/esp-idf/install.sh" esp32
+
+      - name: Build Bootloader and Partition Table
+        run: |
+          . "$GITHUB_WORKSPACE/esp-idf/export.sh"
+          cd "$GITHUB_WORKSPACE/bootloader"
+          cp "$GITHUB_WORKSPACE/configs/sdkconfig.defaults.esp32" sdkconfig
+          idf.py set-target esp32
+          idf.py build
+          ls -lh build/bootloader/bootloader.bin
+          ls -lh build/partition_table/partition-table.bin
+          ls -lh build/linux_boot.bin
+
+      - name: Package Flashable Images
+        run: |
+          chmod +x scripts/package-cam.sh
+          ./scripts/package-cam.sh
+
+      - name: Upload Flashable Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-esp32cam-4m-build
+          path: images/
+          if-no-files-found: error
+          retention-days: 14

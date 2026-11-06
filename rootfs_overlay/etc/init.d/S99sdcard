@@ -1,0 +1,32 @@
+#!/bin/sh
+# Auto-mount MicroSD card on ESP32-CAM if inserted
+
+case "$1" in
+    start)
+        echo "Checking for MicroSD card..."
+        mkdir -p /sd
+        
+        # Give kernel MMCSD driver a moment to register card
+        for i in 1 2 3; do
+            for dev in /dev/mmcblk0p1 /dev/mmcblk0; do
+                if [ -b "$dev" ]; then
+                    echo "Found SD block device: $dev"
+                    if mount -t auto -o noatime "$dev" /sd 2>/dev/null; then
+                        echo "[OK] MicroSD card mounted successfully at /sd"
+                        exit 0
+                    fi
+                fi
+            done
+            sleep 1
+        done
+        echo "[INFO] No MicroSD card detected. Linux running from internal flash."
+        ;;
+    stop)
+        umount /sd 2>/dev/null
+        ;;
+    *)
+        echo "Usage: $0 {start|stop}"
+        exit 1
+        ;;
+esac
+exit 0

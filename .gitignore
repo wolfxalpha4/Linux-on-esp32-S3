@@ -1,0 +1,12 @@
+build/
+toolchain/
+crosstool-NG/
+buildroot/
+esp-idf/
+xtensa-dynconfig/
+images/
+.venv/
+*.bin
+*.cramfs
+*.jffs2
+xipImage
