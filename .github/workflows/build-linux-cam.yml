@@ -60,46 +60,47 @@ jobs:
           echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
           "$GITHUB_WORKSPACE/.venv/bin/esptool.py" version
 
-      - name: Build xtensa-dynconfig esp32 overlay
+      - name: Setup Xtensa Toolchain & Dynconfig
         run: |
-          mkdir -p xtensa-dynconfig
-          git clone https://github.com/jcmvbkbc/xtensa-dynconfig -b original xtensa-dynconfig/repo
-          wget -q https://github.com/jcmvbkbc/xtensa-toolchain-build/raw/e46089b8418f27ecd895881f071aa192dd7f42b5/overlays/original/esp32.tar.gz -O xtensa-dynconfig/esp32.tar.gz
-          mkdir -p xtensa-dynconfig/esp32
-          tar -xf xtensa-dynconfig/esp32.tar.gz -C xtensa-dynconfig/esp32
-          sed -i 's/\(XSHAL_ABI\s\+\)XTHAL_ABI_WINDOWED/\1XTHAL_ABI_CALL0/' xtensa-dynconfig/esp32/{binutils,gcc}/xtensa-config.h
-          make -C xtensa-dynconfig/repo ORIG=1 CONF_DIR="$GITHUB_WORKSPACE/xtensa-dynconfig" esp32.so
-          cp xtensa-dynconfig/repo/esp32.so xtensa-dynconfig/esp32.so
-          ls -la xtensa-dynconfig/esp32.so
-
-      - name: Cache Xtensa toolchain
-        id: cache-toolchain
-        uses: actions/cache@v4
-        with:
-          path: toolchain/xtensa-esp32-linux-uclibcfdpic
-          key: xtensa-esp32-toolchain-fdpic-v1
-
-      - name: Build Xtensa toolchain (if not cached)
-        if: steps.cache-toolchain.outputs.cache-hit != 'true'
-        env:
-          XTENSA_GNU_CONFIG: ${{ github.workspace }}/xtensa-dynconfig/esp32.so
-        run: |
-          git clone https://github.com/jcmvbkbc/crosstool-NG.git -b xtensa-fdpic crosstool-NG
-          pushd crosstool-NG
-          ./bootstrap
-          ./configure --enable-local
-          make -j$(nproc)
-          ./ct-ng xtensa-esp32-linux-uclibcfdpic
           mkdir -p "$GITHUB_WORKSPACE/toolchain"
-          CT_PREFIX="$GITHUB_WORKSPACE/toolchain" nice ./ct-ng build
-          popd
-          test -x "$GITHUB_WORKSPACE/toolchain/xtensa-esp32-linux-uclibcfdpic/bin/xtensa-esp32-linux-uclibcfdpic-gcc"
+          echo "Downloading pre-compiled Xtensa FDPIC toolchain..."
+          wget -q --retry-connrefused --waitretry=2 --read-timeout=30 --timeout=20 -t 5 \
+            "https://github.com/wolfxalpha4/Linux-on-esp32-S3/releases/download/toolchain-v1/xtensa-esp32-all-toolchain.zip" \
+            -O /tmp/toolchain.zip
+          unzip -q /tmp/toolchain.zip -d "$GITHUB_WORKSPACE/toolchain"
+          tar -xzf "$GITHUB_WORKSPACE/toolchain/xtensa-esp32s3-toolchain.tar.gz" -C "$GITHUB_WORKSPACE/toolchain"
+          rm -f "$GITHUB_WORKSPACE/toolchain/xtensa-esp32s3-toolchain.tar.gz" /tmp/toolchain.zip
+
+          # Make toolchain executables runnable
+          chmod -R +x "$GITHUB_WORKSPACE/toolchain/bin"
+          chmod -R +x "$GITHUB_WORKSPACE/toolchain/libexec"
+          chmod -R +x "$GITHUB_WORKSPACE/toolchain/xtensa-esp32s3-linux-uclibcfdpic/bin"
+
+          # Create xtensa-esp32-linux-uclibcfdpic symlinks
+          for f in "$GITHUB_WORKSPACE/toolchain/bin"/xtensa-esp32s3-linux-uclibcfdpic-*; do
+            ln -sf "$(basename "$f")" "${f/esp32s3/esp32}"
+          done
+          ln -sf xtensa-esp32s3-linux-uclibcfdpic "$GITHUB_WORKSPACE/toolchain/xtensa-esp32-linux-uclibcfdpic"
+
+          # Also symlink into /opt for complete compatibility
+          sudo mkdir -p /opt/xtensa-esp32s3-linux-uclibcfdpic
+          sudo cp -a "$GITHUB_WORKSPACE/toolchain/esp32.so" /opt/xtensa-esp32s3-linux-uclibcfdpic/esp32.so
+          sudo cp -a "$GITHUB_WORKSPACE/toolchain/esp32s3.so" /opt/xtensa-esp32s3-linux-uclibcfdpic/esp32s3.so
+
+          mkdir -p "$GITHUB_WORKSPACE/xtensa-dynconfig"
+          cp "$GITHUB_WORKSPACE/toolchain/esp32.so" "$GITHUB_WORKSPACE/xtensa-dynconfig/esp32.so"
+
+          # Verify compiler with esp32 dynconfig overlay
+          export XTENSA_GNU_CONFIG="$GITHUB_WORKSPACE/xtensa-dynconfig/esp32.so"
+          "$GITHUB_WORKSPACE/toolchain/bin/xtensa-esp32-linux-uclibcfdpic-gcc" -v
+          "$GITHUB_WORKSPACE/toolchain/bin/xtensa-esp32-linux-uclibcfdpic-gcc" -O2 -c -x c - -o /tmp/check_call0.o <<< "int foo(int a){return a+1;}"
+          readelf -h /tmp/check_call0.o | grep "Flags:"
 
       - name: Build Buildroot Userspace and Kernel
         env:
           XTENSA_GNU_CONFIG: ${{ github.workspace }}/xtensa-dynconfig/esp32.so
         run: |
-          TOOLCHAIN_DIR="$GITHUB_WORKSPACE/toolchain/xtensa-esp32-linux-uclibcfdpic"
+          TOOLCHAIN_DIR="$GITHUB_WORKSPACE/toolchain"
           export PATH="$TOOLCHAIN_DIR/bin:$PATH"
 
           git clone https://github.com/jcmvbkbc/buildroot -b xtensa-2024.05-fdpic buildroot
@@ -112,7 +113,7 @@ jobs:
           buildroot/utils/config --file build/.config --set-str ROOTFS_OVERLAY "$GITHUB_WORKSPACE/rootfs_overlay"
           buildroot/utils/config --file build/.config --set-str LINUX_KERNEL_CUSTOM_CONFIG_FILE "$GITHUB_WORKSPACE/configs/esp32cam_4m_linux.config"
 
-          make -C buildroot O="$GITHUB_WORKSPACE/build" -j$(nproc)
+          make -C buildroot O="$GITHUB_WORKSPACE/build" XTENSA_GNU_CONFIG="$GITHUB_WORKSPACE/xtensa-dynconfig/esp32.so" -j$(nproc)
 
           test -f build/images/xipImage
           test -f build/images/rootfs.cramfs
@@ -127,7 +128,8 @@ jobs:
         run: |
           . "$GITHUB_WORKSPACE/esp-idf/export.sh"
           cd "$GITHUB_WORKSPACE/bootloader"
-          cp "$GITHUB_WORKSPACE/configs/sdkconfig.defaults.esp32" sdkconfig
+          cp "$GITHUB_WORKSPACE/configs/sdkconfig.defaults.esp32" sdkconfig.defaults
+          cp "$GITHUB_WORKSPACE/configs/partitions.csv" partitions.csv
           idf.py set-target esp32
           idf.py build
           ls -lh build/bootloader/bootloader.bin
