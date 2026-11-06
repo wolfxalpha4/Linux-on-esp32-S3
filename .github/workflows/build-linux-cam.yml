@@ -119,6 +119,7 @@ jobs:
           buildroot/utils/config --file build/.config --set-str TOOLCHAIN_EXTERNAL_CUSTOM_PREFIX '$(ARCH)-esp32-linux-uclibcfdpic'
           buildroot/utils/config --file build/.config --set-str ROOTFS_OVERLAY "$GITHUB_WORKSPACE/rootfs_overlay"
           buildroot/utils/config --file build/.config --set-str LINUX_KERNEL_CUSTOM_CONFIG_FILE "$GITHUB_WORKSPACE/configs/esp32cam_4m_linux.config"
+          buildroot/utils/config --file build/.config --set-str BR2_PACKAGE_BUSYBOX_CONFIG "$GITHUB_WORKSPACE/configs/busybox.config"
 
           make -C buildroot O="$GITHUB_WORKSPACE/build" HOST_CFLAGS="-O2 -std=gnu17" HOST_CXXFLAGS="-O2 -std=gnu17" XTENSA_GNU_CONFIG="$GITHUB_WORKSPACE/xtensa-dynconfig/esp32.so" -j$(nproc)
 
