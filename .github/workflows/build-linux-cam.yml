@@ -121,7 +121,7 @@ jobs:
           make -C buildroot O="$GITHUB_WORKSPACE/build" HOST_CFLAGS="-O2 -std=gnu17" HOST_CXXFLAGS="-O2 -std=gnu17" XTENSA_GNU_CONFIG="$GITHUB_WORKSPACE/xtensa-dynconfig/esp32.so" -j$(nproc)
 
           test -f build/images/xipImage
-          test -f build/images/rootfs.cramfs
+          test -f build/images/rootfs.ext4
           ls -lh build/images/
 
       - name: Upload Intermediate Kernel and Rootfs

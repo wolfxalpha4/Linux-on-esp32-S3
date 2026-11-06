@@ -17,8 +17,7 @@ static const void * IRAM_ATTR map_partition(const char *name)
 
     it = esp_partition_find(ESP_PARTITION_TYPE_ANY, ESP_PARTITION_SUBTYPE_ANY, name);
     if (!it) {
-        printf("[ERROR] Partition '%s' not found!\n", name);
-        abort();
+        return NULL;
     }
     part = esp_partition_get(it);
     esp_partition_iterator_release(it);
@@ -37,9 +36,18 @@ static void IRAM_ATTR map_flash_and_go(void)
     printf("   Booting Linux on ESP32-CAM (4MB)     \n");
     printf("=========================================\n");
     ptr0 = map_partition("linux");
+    if (!ptr0) {
+        printf("[ERROR] 'linux' kernel partition not found!\n");
+        abort();
+    }
     printf("Kernel mapped at: %p\n", ptr0);
+
     ptr = map_partition("rootfs");
-    printf("RootFS mapped at: %p\n", ptr);
+    if (ptr) {
+        printf("RootFS mapped at: %p\n", ptr);
+    } else {
+        printf("RootFS: Booting from MicroSD card (/dev/mmcblk0p1)...\n");
+    }
     printf("Transferring control to Linux kernel...\n\n");
 
     asm volatile ("jx %0" :: "r"(ptr0));
